@@ -10,9 +10,6 @@ stackOffset = 0
 scopeTable = 0
 sehFoundState = 0
 
-def is_esp(varnode):
-	return varnode.isRegister() and varnode.getOffset() == 16
-
 def defineScopeTable(addr):
 	dtst = currentProgram.getDataTypeManager().getDataType("/chandler4.c/_EH4_SCOPETABLE")
 	dtstr = currentProgram.getDataTypeManager().getDataType("/chandler4.c/_EH4_SCOPETABLE_RECORD")
