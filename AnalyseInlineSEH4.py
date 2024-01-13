@@ -66,6 +66,8 @@ while funcbody.contains(instr.getAddress()):
 		# TODO: handle explicit SEH4 prolog call
 		sehFoundState = 0
 		break
+	else:
+		sehFoundState = 0
 	
 	instr = instr.getNext()
 
