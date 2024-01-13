@@ -21,53 +21,44 @@ def defineScopeTable(addr):
 
 while funcbody.contains(instr.getAddress()):
 	mn = instr.getMnemonicString()
-	optype = instr.getOperandType(0)
 	
 	if mn == u"PUSH":
 		stackOffset = stackOffset + 4
-		if sehFoundState == 0:
-			if instr.getOperandType(0) == OperandType.SCALAR and instr.getOpObjects(0)[0].getSignedValue() == -2:
-				sehFoundState = 1
-		elif sehFoundState == 1:
-			if (optype & OperandType.SCALAR != 0) and (optype & OperandType.ADDRESS != 0):
-				sehFoundState = 2
-				scopeTable = instr.getOpObjects(0)[0].getUnsignedValue()
-			else:
-				sehFoundState = 0
-				# Continue without incrementing the instruction on purpose
-				# so that we can check for sehFoundState==0
-				continue
-		elif sehFoundState == 2:
-			if (optype & OperandType.SCALAR != 0) and (optype & OperandType.ADDRESS != 0):
-				sehFoundState = 3
-			else:
-				sehFoundState = 0
-				# Continue without incrementing the instruction on purpose
-				# so that we can check for sehFoundState==0
-				continue
+	
+	# Other than in sehFoundState == 0, on failing the next state transition,
+	# continue without incrementing the instruction on purpose in case that instruction
+	# is the push that's the start of the inlined SEH4 prolog
+	if sehFoundState == 0:
+		if mn == u"PUSH" and instr.getOperandType(0) == OperandType.SCALAR and instr.getOpObjects(0)[0].getSignedValue() == -2:
+			sehFoundState = 1
+	elif sehFoundState == 1:
+		if mn == u"PUSH" and (instr.getOperandType(0) & OperandType.SCALAR != 0) and (instr.getOperandType(0) & OperandType.ADDRESS != 0):
+			sehFoundState = 2
+			scopeTable = instr.getOpObjects(0)[0].getUnsignedValue()
 		else:
 			sehFoundState = 0
-			# Continue without incrementing the instruction on purpose
-			# so that we can check for sehFoundState==0
 			continue
-	elif mn == u"MOV":
-		if sehFoundState == 3:
-			if (instr.getOperandType(1) & OperandType.ADDRESS != 0) and (instr.getOperandType(1) & OperandType.DYNAMIC != 0) and instr.getOpObjects(1)[0].getName() == "FS" and instr.getOpObjects(1)[1].getValue() == 0:
-				sehFoundState = 4
-				
-				# This is good enough for now to assume that we have found an inlined SEH4 prolog
-				break
-		sehFoundState = 0
-	elif mn == u"CALL" or mn == u"JMP":
-		# Control flow is being transferred so we almost certainly don't have an inlined SEH4 prolog
-		# TODO: handle explicit SEH4 prolog call
-		sehFoundState = 0
-		break
-	else:
-		sehFoundState = 0
-	
+	elif sehFoundState == 2:
+		if mn == u"PUSH" and (instr.getOperandType(0) & OperandType.SCALAR != 0) and (instr.getOperandType(0) & OperandType.ADDRESS != 0):
+			# __except_handler4 being pushed
+			sehFoundState = 3
+		else:
+			sehFoundState = 0
+			continue
+	elif sehFoundState == 3:
+		if mn == u"MOV" and (instr.getOperandType(1) & OperandType.ADDRESS != 0) and (instr.getOperandType(1) & OperandType.DYNAMIC != 0) and instr.getOpObjects(1)[0].getName() == "FS" and instr.getOpObjects(1)[1].getValue() == 0:
+			# mov ???, FS:[0]
+			# loading from ExceptionList.  This is the real important detection; the previous states
+			# are just to get the scope table address, and to differentiate between SEH4 and other
+			# exception mechanisms
+			sehFoundState = 4
+			break
+		else:
+			sehFoundState = 0
+			continue
 	instr = instr.getNext()
 
+# Incorporate the remaining parts of the exception registration structure on the stack
 stackOffset = stackOffset + 12
 stackFrame = func.getStackFrame()
 dtreg = currentProgram.getDataTypeManager().getDataType("/chandler4.c/_EH4_EXCEPTION_REGISTRATION_RECORD")

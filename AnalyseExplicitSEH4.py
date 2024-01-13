@@ -21,38 +21,34 @@ def defineScopeTable(addr):
 
 while funcbody.contains(instr.getAddress()):
 	mn = instr.getMnemonicString()
-	optype = instr.getOperandType(0)
-	
 	if mn == u"PUSH":
 		stackOffset = stackOffset + 4
-		if sehFoundState == 0:
-			if instr.getOperandType(0) == OperandType.SCALAR:
-				sehFoundState = 1
-		elif sehFoundState == 1:
-			if (optype & OperandType.SCALAR != 0) and (optype & OperandType.ADDRESS != 0):
-				sehFoundState = 2
-				scopeTable = instr.getOpObjects(0)[0].getUnsignedValue()
+	
+	if sehFoundState == 0:
+		if mn == u"PUSH" and instr.getOperandType(0) == OperandType.SCALAR:
+			# stack delta parameter
+			sehFoundState = 1
+	elif sehFoundState == 1:
+		if mn == u"PUSH" and (instr.getOperandType(0) & OperandType.SCALAR != 0) and (instr.getOperandType(0) & OperandType.ADDRESS != 0):
+			sehFoundState = 2
+			scopeTable = instr.getOpObjects(0)[0].getUnsignedValue()
+		else:
+			sehFoundState = 0
+			continue
+	elif sehFoundState == 2:
+		if mn == u"CALL":
+			dest = instr.getOpObjects(0)[0]
+			destFuncName = getFunctionAt(dest).getName()
+			
+			if destFuncName == "__SEH_prolog4" or destFuncName == "_SEH_prolog4" or destFuncName == "__SEH_prolog4_GS" or destFuncName == "_SEH_prolog4_GS":
+				sehFoundState = 3
+				break
 			else:
 				sehFoundState = 0
-				# Continue without incrementing the instruction on purpose
-				# so that we can check for sehFoundState==0
 				continue
 		else:
 			sehFoundState = 0
-			# Continue without incrementing the instruction on purpose
-			# so that we can check for sehFoundState==0
 			continue
-	elif mn == u"CALL":
-		dest = instr.getOpObjects(0)[0]
-		destFuncName = getFunctionAt(dest).getName()
-		
-		if destFuncName == "__SEH_prolog4" or destFuncName == "_SEH_prolog4" or destFuncName == "__SEH_prolog4_GS" or destFuncName == "_SEH_prolog4_GS":
-			sehFoundState = 3
-			break
-		else:
-			sehFoundState = 0
-	else:
-		sehFoundState = 0
 	
 	instr = instr.getNext()
 
