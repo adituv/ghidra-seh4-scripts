@@ -24,6 +24,10 @@ while funcbody.contains(instr.getAddress()):
 	
 	if mn == u"PUSH":
 		stackOffset = stackOffset + 4
+	if mn == u"CALL" or mn == u"JMP":
+		# control-flow instruction; probably not a function with inlined SEH4 prolog
+		sehFoundState = 0
+		break
 	
 	# Other than in sehFoundState == 0, on failing the next state transition,
 	# continue without incrementing the instruction on purpose in case that instruction
